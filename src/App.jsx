@@ -1,20 +1,20 @@
 import { useState, useEffect } from "react";
 
-
 import {
   collection,
   addDoc,
   query,
   orderBy,
-  onSnapshot
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+  doc
 } from "firebase/firestore";
-
 
 import {
   signInWithPopup,
   signInAnonymously
 } from "firebase/auth";
-
 
 import {
   db,
@@ -22,9 +22,7 @@ import {
   provider
 } from "./firebase";
 
-
 import "./index.css";
-
 
 
 function App(){
@@ -36,8 +34,72 @@ const [message,setMessage] = useState("");
 
 const [room,setRoom] = useState("general");
 
+const [rooms,setRooms] = useState([]);
+
+const [newRoom,setNewRoom] = useState("");
+
 const [messages,setMessages] = useState([]);
 
+
+
+
+// load rooms
+
+useEffect(()=>{
+
+
+const unsubscribe = onSnapshot(
+
+collection(db,"rooms"),
+
+(snapshot)=>{
+
+
+if(snapshot.empty){
+
+[
+"general",
+"coding",
+"random"
+].forEach(async(r)=>{
+
+await setDoc(
+doc(db,"rooms",r),
+{
+name:r
+}
+);
+
+});
+
+}
+
+
+setRooms(
+
+snapshot.docs.map(
+doc=>doc.id
+)
+
+);
+
+
+}
+
+);
+
+
+return unsubscribe;
+
+
+},[]);
+
+
+
+
+
+
+// load messages
 
 
 useEffect(()=>{
@@ -52,14 +114,18 @@ room,
 "messages"
 ),
 
-orderBy("time")
+orderBy(
+"time"
+)
 
 );
 
 
 
 const unsubscribe = onSnapshot(
+
 q,
+
 (snapshot)=>{
 
 
@@ -76,7 +142,10 @@ id:doc.id,
 );
 
 
-});
+}
+
+
+);
 
 
 return unsubscribe;
@@ -89,7 +158,9 @@ return unsubscribe;
 
 
 
-const googleLogin = ()=>{
+
+
+const googleLogin=()=>{
 
 
 signInWithPopup(
@@ -97,18 +168,11 @@ auth,
 provider
 )
 
-.then((result)=>{
+.then(result=>{
 
 setName(
 result.user.displayName
 );
-
-
-})
-
-.catch(error=>{
-
-console.log(error);
 
 });
 
@@ -120,49 +184,8 @@ console.log(error);
 
 
 
-const sendMessage = async()=>{
 
-
-if(!name || !message)
-return;
-
-
-
-await addDoc(
-
-collection(
-db,
-"rooms",
-room,
-"messages"
-),
-
-{
-
-name,
-
-message,
-
-time:Date.now()
-
-}
-
-);
-
-
-
-setMessage("");
-
-
-
-};
-
-
-
-
-
-
-const guestLogin = ()=>{
+const guestLogin=()=>{
 
 
 signInAnonymously(auth)
@@ -180,10 +203,107 @@ setName("Guest");
 
 
 
+
+
+
+const createRoom=async()=>{
+
+
+const r = newRoom
+.trim()
+.toLowerCase();
+
+
+
+if(!r)
+return;
+
+
+
+await setDoc(
+
+doc(
+db,
+"rooms",
+r
+),
+
+{
+name:r
+}
+
+);
+
+
+
+setRoom(r);
+
+setNewRoom("");
+
+
+};
+
+
+
+
+
+
+
+
+
+const sendMessage=async()=>{
+
+
+if(!message || !name)
+return;
+
+
+
+await addDoc(
+
+collection(
+
+db,
+
+"rooms",
+
+room,
+
+"messages"
+
+),
+
+{
+
+name,
+
+message,
+
+time:Date.now()
+
+}
+
+
+);
+
+
+
+setMessage("");
+
+
+
+};
+
+
+
+
+
+
+
+
 return (
 
 <div className="chat-container">
-
 
 
 <h1>
@@ -192,13 +312,12 @@ return (
 
 
 
-
 <button onClick={googleLogin}>
 Login with Google
 </button>
 
 
-<button 
+<button
 className="guest"
 onClick={guestLogin}
 >
@@ -208,22 +327,29 @@ Continue as Guest
 
 
 
+
 <div className="rooms">
 
 
-<button onClick={()=>setRoom("general")}>
-General
+{
+
+rooms.map(r=>(
+
+<button
+
+key={r}
+
+onClick={()=>setRoom(r)}
+
+>
+
+{r}
+
 </button>
 
+))
 
-<button onClick={()=>setRoom("coding")}>
-Coding
-</button>
-
-
-<button onClick={()=>setRoom("random")}>
-Random
-</button>
+}
 
 
 </div>
@@ -232,15 +358,23 @@ Random
 
 
 
+
 <input
 
-placeholder="Your name"
+placeholder="Create new room"
 
-value={name}
+value={newRoom}
 
-onChange={(e)=>setName(e.target.value)}
+onChange={
+e=>setNewRoom(e.target.value)
+}
 
 />
+
+
+<button onClick={createRoom}>
+Create Room
+</button>
 
 
 
@@ -254,8 +388,8 @@ Room: {room}
 
 
 
-<div className="messages">
 
+<div className="messages">
 
 
 {
@@ -264,8 +398,11 @@ messages.map(msg=>(
 
 
 <div
+
 className="message"
+
 key={msg.id}
+
 >
 
 
@@ -279,14 +416,13 @@ key={msg.id}
 </p>
 
 
-</div>
 
+</div>
 
 
 ))
 
 }
-
 
 
 
@@ -298,15 +434,13 @@ key={msg.id}
 
 <input
 
-
 placeholder="Type message..."
-
 
 value={message}
 
-
-onChange={(e)=>setMessage(e.target.value)}
-
+onChange={
+e=>setMessage(e.target.value)
+}
 
 />
 
@@ -320,9 +454,7 @@ Send
 
 </div>
 
-
 );
-
 
 
 }
